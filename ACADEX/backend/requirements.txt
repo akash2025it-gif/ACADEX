@@ -1,0 +1,20 @@
+# ==============================================================================
+# ACADEX Backend — Production Dependencies
+# ==============================================================================
+
+# Core Framework
+Django>=5.0,<7.0
+djangorestframework>=3.14.0
+Pillow>=10.0.0
+
+# Production WSGI Server & Static Files
+gunicorn>=21.2.0
+whitenoise>=6.6.0
+
+# Production Database (PostgreSQL)
+psycopg2-binary>=2.9.9
+dj-database-url>=2.1.0
+
+# System Libraries
+asgiref>=3.8.0
+sqlparse>=0.5.0
