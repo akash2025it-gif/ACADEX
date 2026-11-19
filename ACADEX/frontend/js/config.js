@@ -4,21 +4,32 @@
  */
 
 function resolveApiBaseUrl() {
+  // 0. Check URL query parameter override e.g. ?api=https://acadex-backend.onrender.com/api
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const apiParam = urlParams.get('api');
+    if (apiParam) {
+      const cleanParam = apiParam.trim().replace(/\/+$/, '');
+      localStorage.setItem('acadex_api_url', cleanParam);
+      return cleanParam;
+    }
+  } catch (e) {}
+
   // 1. Check runtime window override
   if (window.ACADEX_API_URL) {
-    return window.ACADEX_API_URL;
+    return window.ACADEX_API_URL.trim().replace(/\/+$/, '');
   }
 
   // 2. Check meta tag override
   const metaTag = document.querySelector('meta[name="acadex-api-url"]');
   if (metaTag && metaTag.content) {
-    return metaTag.content;
+    return metaTag.content.trim().replace(/\/+$/, '');
   }
 
   // 3. Check persistent localStorage setting
   const storedUrl = localStorage.getItem('acadex_api_url');
   if (storedUrl) {
-    return storedUrl;
+    return storedUrl.trim().replace(/\/+$/, '');
   }
 
   // 4. Default for local development

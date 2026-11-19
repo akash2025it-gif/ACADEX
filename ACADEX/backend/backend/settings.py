@@ -32,7 +32,14 @@ if ALLOWED_HOSTS_ENV:
 elif DEBUG:
     ALLOWED_HOSTS = ['*']
 else:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    ALLOWED_HOSTS = ['.onrender.com', 'localhost', '127.0.0.1']
+
+# CSRF Trusted Origins (required for POST requests in production)
+CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+if CSRF_TRUSTED_ORIGINS_ENV:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in CSRF_TRUSTED_ORIGINS_ENV.split(',') if o.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com', 'https://*.vercel.app']
 
 # Production Security Headers (when DEBUG=False)
 if not DEBUG:
@@ -71,6 +78,7 @@ AUTH_USER_MODEL = 'beacadex.User'
 MIDDLEWARE = [
     'beacadex.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -105,30 +113,37 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    url = urlparse(DATABASE_URL)
-    # Check if PostgreSQL
-    if url.scheme in ('postgres', 'postgresql'):
+    try:
+        import dj_database_url
         DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': url.path[1:],
-                'USER': url.username,
-                'PASSWORD': url.password,
-                'HOST': url.hostname,
-                'PORT': url.port or '5432',
-                'CONN_MAX_AGE': 600,
-            }
+            'default': dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                conn_health_checks=True,
+            )
         }
-    else:
-        # Generic or SQLite database URL
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
+    except ImportError:
+        url = urlparse(DATABASE_URL)
+        if url.scheme in ('postgres', 'postgresql'):
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': url.path[1:],
+                    'USER': url.username,
+                    'PASSWORD': url.password,
+                    'HOST': url.hostname,
+                    'PORT': url.port or '5432',
+                    'CONN_MAX_AGE': 600,
+                }
             }
-        }
+        else:
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': BASE_DIR / 'db.sqlite3',
+                }
+            }
 else:
-    # Standard SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -190,6 +205,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
