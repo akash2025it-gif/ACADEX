@@ -4,40 +4,26 @@
  */
 
 function resolveApiBaseUrl() {
-  // 0. Check URL query parameter override e.g. ?api=https://acadex-backend.onrender.com/api
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const apiParam = urlParams.get('api');
-    if (apiParam) {
-      const cleanParam = apiParam.trim().replace(/\/+$/, '');
-      localStorage.setItem('acadex_api_url', cleanParam);
-      return cleanParam;
-    }
-  } catch (e) {}
-
-  // 1. Check runtime window override
-  if (window.ACADEX_API_URL) {
-    return window.ACADEX_API_URL.trim().replace(/\/+$/, '');
-  }
-
-  // 2. Check meta tag override
-  const metaTag = document.querySelector('meta[name="acadex-api-url"]');
-  if (metaTag && metaTag.content) {
-    return metaTag.content.trim().replace(/\/+$/, '');
-  }
-
-  // 3. Check persistent localStorage setting
-  const storedUrl = localStorage.getItem('acadex_api_url');
-  if (storedUrl) {
-    return storedUrl.trim().replace(/\/+$/, '');
-  }
-
-  // 4. Default for local development
+  // 1. Localhost and 127.0.0.1 strictly use local backend (offline-safe development)
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://127.0.0.1:8000/api';
   }
 
-  // 5. Default for production relative path (or Vercel rewrite proxy)
+  // 2. Explicit query parameter override (e.g. ?api=https://...)
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const apiParam = urlParams.get('api');
+    if (apiParam) {
+      return apiParam.trim().replace(/\/+$/, '');
+    }
+  } catch (e) {}
+
+  // 3. Runtime window override
+  if (window.ACADEX_API_URL) {
+    return window.ACADEX_API_URL.trim().replace(/\/+$/, '');
+  }
+
+  // 4. Production Vercel deployment uses relative API base (handled by Vercel rewrite proxy)
   return '/api';
 }
 

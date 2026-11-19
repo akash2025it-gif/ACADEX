@@ -5,11 +5,11 @@
   "rewrites": [
     {
       "source": "/api/:match*",
-      "destination": "https://acadex-backend.onrender.com/api/:match*"
+      "destination": "https://acadex-backend-2n0i.onrender.com/api/:match*"
     },
     {
       "source": "/media/:match*",
-      "destination": "https://acadex-backend.onrender.com/media/:match*"
+      "destination": "https://acadex-backend-2n0i.onrender.com/media/:match*"
     },
     {
       "source": "/(.*)",
