@@ -24,6 +24,10 @@ DEFAULT_PASSWORD = os.environ.get('DEMO_USER_PASSWORD', 'AcadexDemo2026!')
 
 def seed_database():
     print("--- Seeding ACADEX Database ---")
+    force_reseed = os.environ.get('FORCE_RESEED', '').lower() in ('true', '1')
+    if User.objects.filter(username='hod_it').exists() and not force_reseed:
+        print("ACADEX database already contains seeded records. Skipping re-seed. (Set FORCE_RESEED=true to override).")
+        return
 
     # 1. Create HOD User
     hod_user, created = User.objects.get_or_create(

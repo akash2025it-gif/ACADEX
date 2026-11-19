@@ -951,3 +951,35 @@ def department_student_detail_view(request, pk):
     data['marks'] = InternalMarkSerializer(student.internal_marks.all(), many=True).data
 
     return Response(data)
+
+
+import mimetypes
+from django.http import Http404, FileResponse
+from django.utils._os import safe_join
+
+def secure_media_view(request, path):
+    """
+    Secure media file serving in production:
+    - Strict path traversal protection using safe_join
+    - Prevents browser MIME-sniffing vulnerabilities (X-Content-Type-Options: nosniff)
+    - Isolates media context (Content-Security-Policy: default-src 'none')
+    - Forces attachment download for active content (HTML, SVG, JS) to eliminate Stored XSS
+    """
+    try:
+        full_path = safe_join(str(settings.MEDIA_ROOT), path)
+    except Exception:
+        raise Http404("Invalid file path.")
+
+    if not os.path.exists(full_path) or os.path.isdir(full_path):
+        raise Http404("File not found.")
+
+    content_type, _ = mimetypes.guess_type(full_path)
+    content_type = content_type or 'application/octet-stream'
+
+    response = FileResponse(open(full_path, 'rb'), content_type=content_type)
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Content-Security-Policy'] = "default-src 'none'"
+    if content_type in ('text/html', 'image/svg+xml', 'application/javascript'):
+        filename = os.path.basename(full_path)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

@@ -1,4 +1,5 @@
 import os
+from django.conf import settings
 from django.http import HttpResponse
 
 
@@ -6,8 +7,8 @@ class CorsMiddleware:
     """
     Production-ready CORS middleware for ACADEX.
     Supports:
-    - Custom production frontend origins via CORS_ALLOWED_ORIGINS / FRONTEND_URL
-    - Wildcard fallback for local development or demo deployments
+    - Custom production frontend origins via settings / CORS_ALLOWED_ORIGINS / FRONTEND_URL
+    - Exact origin matching (no unrestricted wildcard in production)
     - Pre-flight OPTIONS handling with caching headers
     """
     def __init__(self, get_response):
@@ -16,7 +17,7 @@ class CorsMiddleware:
         if allowed_origins_env:
             self.allowed_origins = [o.strip() for o in allowed_origins_env.split(',') if o.strip()]
         else:
-            self.allowed_origins = ['*']
+            self.allowed_origins = getattr(settings, 'CORS_ALLOWED_ORIGINS', ['https://acadex-portal.vercel.app'])
 
     def __call__(self, request):
         if request.method == 'OPTIONS':

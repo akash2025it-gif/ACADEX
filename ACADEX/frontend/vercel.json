@@ -1,9 +1,16 @@
 {
   "version": 2,
-  "name": "acadex-portal",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://acadex-backend.onrender.com/api/:match*"
+    },
+    {
+      "source": "/media/:match*",
+      "destination": "https://acadex-backend.onrender.com/media/:match*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

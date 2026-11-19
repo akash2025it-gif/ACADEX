@@ -41,8 +41,26 @@ if CSRF_TRUSTED_ORIGINS_ENV:
 else:
     CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com', 'https://*.vercel.app']
 
+# CORS Allowed Origins: Explicit production origin + local dev origins (no unrestricted wildcard in prod)
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS') or os.environ.get('FRONTEND_URL', '')
+if CORS_ALLOWED_ORIGINS_ENV:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS_ENV.split(',') if o.strip()]
+elif DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost:5500',
+        'http://127.0.0.1:5500',
+        'http://localhost:3000',
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        'https://acadex-portal.vercel.app',
+    ]
+
 # Production Security Headers (when DEBUG=False)
 if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
