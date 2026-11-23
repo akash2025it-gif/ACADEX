@@ -352,7 +352,8 @@ const App = {
       { id: 'student-materials', label: 'Study Materials', icon: 'book' },
       { id: 'student-documents', label: 'Document Vault', icon: 'upload' },
       { id: 'student-leaves', label: 'Leave Requests', icon: 'clock' },
-      { id: 'student-announcements', label: 'Notices & Circulars', icon: 'bell' }
+      { id: 'student-announcements', label: 'Notices & Circulars', icon: 'bell' },
+      { id: 'student-settings', label: 'Account Settings', icon: 'settings' }
     ];
 
     return this.buildNavHtml(items, view);
@@ -369,6 +370,7 @@ const App = {
       { id: 'hod-assignments', label: 'Assignment Review', icon: 'fileText' },
       { id: 'hod-marks', label: 'Marks Management', icon: 'barChart' },
       { id: 'hod-materials', label: 'Course Materials', icon: 'book' },
+      { id: 'hod-documents', label: 'Document Verification', icon: 'upload' },
       { id: 'hod-announcements', label: 'Publish Notices', icon: 'bell' }
     ];
 
@@ -432,6 +434,9 @@ const App = {
       case 'student-marks':
         StudentModule.renderMarks(container);
         break;
+      case 'student-settings':
+        StudentModule.renderSettings(container);
+        break;
 
       // HOD Routes
       case 'hod-overview':
@@ -460,6 +465,9 @@ const App = {
         break;
       case 'hod-marks':
         HODModule.renderMarksManagement(container);
+        break;
+      case 'hod-documents':
+        HODModule.renderDocumentVerification(container);
         break;
 
       default:

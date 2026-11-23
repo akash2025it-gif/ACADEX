@@ -1,5 +1,6 @@
 import mimetypes
 import os
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -36,6 +37,20 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+SAFE_UPLOAD_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
+
+
+def validate_upload(file_obj):
+    """Reject oversized or executable uploads before they reach storage."""
+    if not file_obj:
+        return 'A file is required.'
+    if file_obj.size > MAX_UPLOAD_BYTES:
+        return 'Files must be 10 MB or smaller.'
+    if Path(file_obj.name).suffix.lower() not in SAFE_UPLOAD_EXTENSIONS:
+        return 'Unsupported file type. Upload PDF, Office, text, JPG, or PNG files only.'
+    return None
 
 
 def hod_department(user):
@@ -528,6 +543,11 @@ def assignments_view(request):
 
     serializer = AssignmentSerializer(data=request.data)
     if serializer.is_valid():
+        attachment = request.FILES.get('attachment')
+        if attachment:
+            upload_error = validate_upload(attachment)
+            if upload_error:
+                return Response({'attachment': [upload_error]}, status=status.HTTP_400_BAD_REQUEST)
         department = hod_department(request.user)
         if not request.user.is_superuser and serializer.validated_data['department'].casefold() != department.casefold():
             return Response({'detail': 'You may only create assignments for your own department.'}, status=status.HTTP_403_FORBIDDEN)
@@ -570,6 +590,10 @@ def submit_assignment_view(request, pk):
         return Response({'detail': 'This assignment is not assigned to your class.'}, status=status.HTTP_403_FORBIDDEN)
     file_obj = request.FILES.get('file')
     notes = request.data.get('notes', '')
+    if file_obj:
+        upload_error = validate_upload(file_obj)
+        if upload_error:
+            return Response({'file': [upload_error]}, status=status.HTTP_400_BAD_REQUEST)
 
     submission, created = AssignmentSubmission.objects.update_or_create(
         assignment=assignment,
@@ -665,8 +689,9 @@ def study_materials_view(request):
     serializer = StudyMaterialSerializer(data=request.data)
     if serializer.is_valid():
         file_obj = request.FILES.get('file')
-        if not file_obj:
-            return Response({'file': ['A study-material file is required.']}, status=status.HTTP_400_BAD_REQUEST)
+        upload_error = validate_upload(file_obj)
+        if upload_error:
+            return Response({'file': [upload_error]}, status=status.HTTP_400_BAD_REQUEST)
         file_size_str = ''
         if file_obj:
             file_size_str = f"{round(file_obj.size / (1024 * 1024), 1)} MB"
@@ -718,6 +743,9 @@ def documents_view(request):
 
     serializer = DocumentSerializer(data=request.data)
     if serializer.is_valid():
+        upload_error = validate_upload(request.FILES.get('file'))
+        if upload_error:
+            return Response({'file': [upload_error]}, status=status.HTTP_400_BAD_REQUEST)
         doc = serializer.save(student=request.user.student_profile)
         AuditLog.objects.create(
             user=request.user,
