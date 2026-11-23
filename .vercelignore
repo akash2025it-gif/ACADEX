@@ -1,0 +1,9 @@
+# Ignore backend and environment files when building frontend on Vercel
+ACADEX/backend/
+ACADEX/virtual/
+.env*
+*.py
+*.pyc
+db.sqlite3
+__pycache__/
+.vercel

@@ -1,26 +1,20 @@
 {
-  "version": 2,
-  "builds": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
     {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "https://acadex-backend-2n0i.onrender.com/api/$1"
+      "source": "/api/:match*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/api/:match*"
     },
     {
-      "src": "/media/(.*)",
-      "dest": "https://acadex-backend-2n0i.onrender.com/media/$1"
+      "source": "/media/:match*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/media/:match*"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
