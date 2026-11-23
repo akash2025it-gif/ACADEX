@@ -1,0 +1,7 @@
+# This directory is deployed as a static SPA.  These legacy Django artifacts
+# are not part of the frontend runtime and cause Vercel to select Python.
+manage.py
+frontend/
+fracadex/
+db.sqlite3
+__pycache__/
