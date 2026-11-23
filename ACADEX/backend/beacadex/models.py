@@ -436,7 +436,9 @@ class StudyMaterial(models.Model):
     subject_code = models.CharField(max_length=20, blank=True, default='')
     subject_name = models.CharField(max_length=150)
 
-    file = models.FileField(upload_to='study_materials/')
+    # Seeded catalog entries may be published before a file is attached; user
+    # uploads are still enforced in the API view.
+    file = models.FileField(upload_to='study_materials/', null=True, blank=True)
     file_size = models.CharField(max_length=20, blank=True, default='')
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -662,6 +662,8 @@ def study_materials_view(request):
     serializer = StudyMaterialSerializer(data=request.data)
     if serializer.is_valid():
         file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'file': ['A study-material file is required.']}, status=status.HTTP_400_BAD_REQUEST)
         file_size_str = ''
         if file_obj:
             file_size_str = f"{round(file_obj.size / (1024 * 1024), 1)} MB"
