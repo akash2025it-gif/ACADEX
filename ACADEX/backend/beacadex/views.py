@@ -3,6 +3,9 @@ import os
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
@@ -133,26 +136,21 @@ def register_student_view(request):
 
     vd = serializer.validated_data
 
-    # Create User
-    user = User.objects.create_user(
-        username=vd['username'],
-        email=vd['email'],
-        password=vd['password'],
-        first_name=vd['first_name'],
-        last_name=vd.get('last_name', ''),
-        role='STUDENT'
-    )
+    try:
+        validate_password(vd['password'])
+    except ValidationError as error:
+        return Response({'password': list(error.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Create StudentProfile
-    profile = StudentProfile.objects.create(
-        user=user,
-        register_number=vd['register_number'],
-        department=vd['department'],
-        course=vd.get('course', 'B.Tech ' + vd['department']),
-        year=vd['year'],
-        section=vd.get('section', 'A'),
-        phone=vd.get('phone', '')
-    )
+    with transaction.atomic():
+        user = User.objects.create_user(
+            username=vd['username'], email=vd['email'], password=vd['password'],
+            first_name=vd['first_name'], last_name=vd.get('last_name', ''), role='STUDENT'
+        )
+        profile = StudentProfile.objects.create(
+            user=user, register_number=vd['register_number'], department=vd['department'],
+            course=vd.get('course', 'B.Tech ' + vd['department']), year=vd['year'],
+            section=vd.get('section', 'A'), phone=vd.get('phone', '')
+        )
 
     token, _ = Token.objects.get_or_create(user=user)
 
@@ -227,6 +225,11 @@ def change_password_view(request):
     user = request.user
     if not user.check_password(serializer.validated_data['old_password']):
         return Response({'old_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(serializer.validated_data['new_password'], user=user)
+    except ValidationError as error:
+        return Response({'new_password': list(error.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
     user.set_password(serializer.validated_data['new_password'])
     user.save()

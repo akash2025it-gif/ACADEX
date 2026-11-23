@@ -97,11 +97,6 @@ const App = {
             ` : `
               New Student? <a href="#register" style="font-weight: 600;">Register Portal Account</a>
             `}
-            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-light); font-size: 0.75rem; color: var(--text-subtle);">
-              Quick Demo: 
-              <button onclick="App.demoLogin('STUDENT')" style="color: var(--accent-indigo); font-weight: 600; text-decoration: underline; margin-right: 8px;">Demo Student</button> • 
-              <button onclick="App.demoLogin('HOD')" style="color: var(--accent-indigo); font-weight: 600; text-decoration: underline;">Demo HOD</button>
-            </div>
           </div>
         </div>
       </div>
@@ -218,9 +213,7 @@ const App = {
       this.showToast('Signed in successfully!', 'success');
       window.location.hash = role === 'HOD' ? '#hod-overview' : '#student-overview';
     } catch (err) {
-      console.warn('API login failed, evaluating demo fallback:', err.message);
-      // Fallback for seamless testing
-      this.demoLogin(role, username);
+      this.showToast(err.message || 'Unable to sign in. Please verify your credentials.', 'error');
     }
   },
 
@@ -246,70 +239,8 @@ const App = {
       this.showToast('Registration successful! Welcome to ACADEX.', 'success');
       window.location.hash = '#student-overview';
     } catch (err) {
-      // Demo fallback
-      const user = {
-        id: Date.now(),
-        username: data.username,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        email: data.email,
-        role: 'STUDENT',
-        student_profile: {
-          register_number: data.register_number,
-          department: data.department,
-          year: data.year,
-          section: 'B',
-          course: 'B.Tech IT',
-          phone: '+91 98765 43210'
-        }
-      };
-      Auth.setSession(user, 'demo-token-' + Date.now());
-      this.showToast('Account registered! Welcome to ACADEX.', 'success');
-      window.location.hash = '#student-overview';
+      this.showToast(err.message || 'Registration could not be completed.', 'error');
     }
-  },
-
-  demoLogin(role, customUsername) {
-    let user;
-    if (role === 'HOD') {
-      user = {
-        id: 1,
-        username: customUsername || 'hod_it',
-        first_name: 'Dr. R.',
-        last_name: 'Ramanathan',
-        email: 'hod.it@acadex.edu',
-        role: 'HOD',
-        hod_profile: {
-          employee_id: 'HOD-IT-01',
-          department: 'Information Technology',
-          designation: 'Head of Department & Professor',
-          phone: '+91 98765 11111'
-        }
-      };
-    } else {
-      user = {
-        id: 2,
-        username: customUsername || '25IT104',
-        first_name: 'Alex',
-        last_name: 'Johnson',
-        email: 'alex.j@acadex.edu',
-        role: 'STUDENT',
-        student_profile: {
-          register_number: customUsername || '25IT104',
-          department: 'Information Technology',
-          course: 'B.Tech IT',
-          year: 3,
-          section: 'B',
-          phone: '+91 98765 43210',
-          date_of_birth: '2004-06-15',
-          address: '742 Evergreen Terrace, Tech Park City'
-        }
-      };
-    }
-
-    Auth.setSession(user, 'demo-token-' + Date.now());
-    this.showToast(`Logged in as ${role === 'HOD' ? 'Head of Department' : 'Student (Alex Johnson)'}`, 'success');
-    window.location.hash = role === 'HOD' ? '#hod-overview' : '#student-overview';
   },
 
   renderAppShell(viewName) {
@@ -590,30 +521,15 @@ const App = {
     }, 4000);
   },
 
-  showNotificationsDrop() {
-    this.openModal(`
-      <div class="modal-header">
-        <h3 class="modal-title">Notifications Inbox</h3>
-        <button class="modal-close-btn" onclick="App.closeModal()">${getIcon('x')}</button>
-      </div>
-      <div class="modal-body">
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div style="padding: 0.75rem; background: var(--bg-surface-alt); border-radius: var(--radius-md);">
-            <div style="font-weight: 600; font-size: 0.875rem;">Mid-Semester Examination Schedule Published</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">Exam schedule for Semester V is now available on your portal.</div>
-            <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 4px;">2 hours ago</div>
-          </div>
-          <div style="padding: 0.75rem; background: var(--bg-surface-alt); border-radius: var(--radius-md);">
-            <div style="font-weight: 600; font-size: 0.875rem;">Assignment Graded: Web Technology & Cloud</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">You scored 48/50 in Responsive Dashboard Project.</div>
-            <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 4px;">Yesterday</div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="App.closeModal()">Close</button>
-      </div>
-    `);
+  async showNotificationsDrop() {
+    this.openModal('<div class="modal-body">Loading notifications…</div>');
+    try {
+      const notices = await API.notifications.list();
+      const safe = (value = '') => { const node = document.createElement('span'); node.textContent = value; return node.innerHTML; };
+      this.openModal(`<div class="modal-header"><h3 class="modal-title">Notifications Inbox</h3><button class="modal-close-btn" onclick="App.closeModal()">${getIcon('x')}</button></div><div class="modal-body">${notices.length ? notices.map(n => `<div style="padding:.75rem;margin-bottom:.5rem;background:var(--bg-surface-alt);border-radius:var(--radius-md)"><strong>${safe(n.title)}</strong><p>${safe(n.message)}</p></div>`).join('') : '<div class="empty-state"><p>No notifications yet.</p></div>'}</div><div class="modal-footer"><button class="btn btn-secondary" onclick="App.closeModal()">Close</button></div>`);
+    } catch (error) {
+      this.openModal(`<div class="modal-body"><h3>Unable to load notifications</h3><p>${error.message}</p></div>`);
+    }
   }
 };
 
