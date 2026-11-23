@@ -60,6 +60,13 @@ def get_user_full_data(user):
     return data
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_view(request):
+    """Unauthenticated deployment health check without disclosing sensitive state."""
+    return Response({'status': 'ok', 'service': 'acadex-api'})
+
+
 # ===================================================================
 # 1. AUTHENTICATION & PROFILE VIEWS
 # ===================================================================
@@ -602,7 +609,7 @@ def grade_submission_view(request, pk):
 
     if not request.user.is_superuser and sub.assignment.department.casefold() != hod_department(request.user).casefold():
         return Response({'detail': 'You may only grade submissions in your own department.'}, status=status.HTTP_403_FORBIDDEN)
-    serializer = GradeSubmissionSerializer(data=request.data)
+    serializer = GradeSubmissionSerializer(data=request.data, context={'submission': sub})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

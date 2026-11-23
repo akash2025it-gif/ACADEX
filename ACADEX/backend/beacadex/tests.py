@@ -87,6 +87,11 @@ class AcadexAuthTests(TestCase):
         self.assertEqual(res.data['user']['username'], '25IT888')
         self.assertTrue(StudentProfile.objects.filter(register_number='25IT888').exists())
 
+    def test_health_endpoint_is_public(self):
+        res = self.client.get('/api/health/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['status'], 'ok')
+
 
 class AcadexPermissionsAndBusinessLogicTests(TestCase):
     def setUp(self):
@@ -182,6 +187,15 @@ class AcadexPermissionsAndBusinessLogicTests(TestCase):
         my_leaves = self.client.get('/api/leaves/')
         self.assertEqual(my_leaves.status_code, status.HTTP_200_OK)
         self.assertEqual(my_leaves.data[0]['status'], 'APPROVED')
+
+    def test_leave_rejects_invalid_date_range(self):
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.student_token.key)
+        response = self.client.post('/api/leaves/', {
+            'leave_type': 'Medical Leave', 'reason': 'Rest',
+            'from_date': '2026-11-22', 'to_date': '2026-11-20',
+        })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('to_date', response.data)
 
     def test_attendance_batch_marking_and_summary(self):
         """Test HOD batch marking attendance and student summary calculation."""

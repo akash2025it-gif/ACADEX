@@ -264,6 +264,12 @@ class GradeSubmissionSerializer(serializers.Serializer):
     score    = serializers.IntegerField(min_value=0)
     feedback = serializers.CharField(required=False, default='', allow_blank=True)
 
+    def validate_score(self, value):
+        submission = self.context.get('submission')
+        if submission and value > submission.assignment.max_score:
+            raise serializers.ValidationError('Score cannot exceed the assignment maximum.')
+        return value
+
 
 # =====================================================
 # STUDY MATERIAL SERIALIZER
@@ -304,6 +310,11 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             'id', 'student', 'status', 'hod_comments', 'reviewed_by',
             'applied_at', 'reviewed_at'
         ]
+
+    def validate(self, attrs):
+        if attrs['to_date'] < attrs['from_date']:
+            raise serializers.ValidationError({'to_date': 'End date cannot be earlier than start date.'})
+        return attrs
 
     def get_student_name(self, obj):
         return f"{obj.student.user.first_name} {obj.student.user.last_name}"
