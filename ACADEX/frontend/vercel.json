@@ -3,15 +3,15 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://acadex-backend-2n0i.onrender.com/api/:match*"
+      "source": "/api/:path*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/api/:path*"
     },
     {
-      "source": "/media/:match*",
-      "destination": "https://acadex-backend-2n0i.onrender.com/media/:match*"
+      "source": "/media/:path*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/media/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api|media).*)",
       "destination": "/index.html"
     }
   ],

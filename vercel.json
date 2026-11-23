@@ -3,23 +3,23 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://acadex-backend-2n0i.onrender.com/api/:match*"
+      "source": "/api/:path*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/api/:path*"
     },
     {
-      "source": "/media/:match*",
-      "destination": "https://acadex-backend-2n0i.onrender.com/media/:match*"
+      "source": "/media/:path*",
+      "destination": "https://acadex-backend-2n0i.onrender.com/media/:path*"
     },
     {
-      "source": "/css/:match*",
-      "destination": "/ACADEX/frontend/css/:match*"
+      "source": "/css/:path*",
+      "destination": "/ACADEX/frontend/css/:path*"
     },
     {
-      "source": "/js/:match*",
-      "destination": "/ACADEX/frontend/js/:match*"
+      "source": "/js/:path*",
+      "destination": "/ACADEX/frontend/js/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api|media|css|js).*)",
       "destination": "/ACADEX/frontend/index.html"
     }
   ],
