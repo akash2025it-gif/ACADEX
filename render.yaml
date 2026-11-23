@@ -38,6 +38,8 @@ services:
         value: ".onrender.com,localhost,127.0.0.1"
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: "https://*.onrender.com,https://*.vercel.app"
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://acadex-portal.vercel.app,http://localhost:8000,http://127.0.0.1:8000,http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000"
       - key: DATABASE_URL

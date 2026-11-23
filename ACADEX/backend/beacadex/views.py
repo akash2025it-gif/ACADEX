@@ -1,6 +1,12 @@
+import mimetypes
+import os
+
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Avg, Count, Q
+from django.http import FileResponse, Http404
 from django.utils import timezone
+from django.utils._os import safe_join
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -27,6 +33,21 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def hod_department(user):
+    """Return the department an HOD is authorized to manage, if any."""
+    profile = getattr(user, 'hod_profile', None)
+    return profile.department if profile else ''
+
+
+def department_student_queryset(user):
+    """Scope an HOD's student data to their own department."""
+    queryset = StudentProfile.objects.select_related('user')
+    if user.is_superuser:
+        return queryset
+    department = hod_department(user)
+    return queryset.filter(department__iexact=department) if department else queryset.none()
 
 
 def get_user_full_data(user):
@@ -341,7 +362,7 @@ def mark_attendance_batch_view(request):
         student_id = item.get('student_id')
         stat = item.get('status', 'PRESENT')
         try:
-            student = StudentProfile.objects.get(pk=student_id)
+            student = department_student_queryset(request.user).get(pk=student_id)
             Attendance.objects.update_or_create(
                 student=student,
                 subject_code=subject_code,
@@ -371,7 +392,7 @@ def mark_attendance_batch_view(request):
 def department_attendance_analytics_view(request):
     """Department-wide attendance statistics and low-attendance watchlist."""
     dept = getattr(request.user.hod_profile, 'department', '') if hasattr(request.user, 'hod_profile') else ''
-    students = StudentProfile.objects.all()
+    students = department_student_queryset(request.user)
     if dept:
         students = students.filter(department__iexact=dept)
 
@@ -427,8 +448,12 @@ def timetable_view(request):
             student = request.user.student_profile
             qs = qs.filter(department__iexact=student.department, year=student.year, section__iexact=student.section)
         else:
+            department = hod_department(request.user)
+            if department and not request.user.is_superuser:
+                qs = qs.filter(department__iexact=department)
             if dept:
-                qs = qs.filter(department__iexact=dept)
+                if request.user.is_superuser:
+                    qs = qs.filter(department__iexact=dept)
             if year:
                 qs = qs.filter(year=year)
             if sec:
@@ -443,6 +468,9 @@ def timetable_view(request):
 
     serializer = TimetableSlotSerializer(data=request.data)
     if serializer.is_valid():
+        department = hod_department(request.user)
+        if not request.user.is_superuser and serializer.validated_data['department'].casefold() != department.casefold():
+            return Response({'detail': 'You may only manage your own department timetable.'}, status=status.HTTP_403_FORBIDDEN)
         slot = serializer.save()
         return Response(TimetableSlotSerializer(slot).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -455,6 +483,8 @@ def delete_timetable_slot_view(request, pk):
         slot = TimetableSlot.objects.get(pk=pk)
     except TimetableSlot.DoesNotExist:
         return Response({'detail': 'Slot not found.'}, status=status.HTTP_404_NOT_FOUND)
+    if not request.user.is_superuser and slot.department.casefold() != hod_department(request.user).casefold():
+        return Response({'detail': 'You may only manage your own department timetable.'}, status=status.HTTP_403_FORBIDDEN)
     slot.delete()
     return Response({'detail': 'Slot deleted.'}, status=status.HTTP_204_NO_CONTENT)
 
@@ -475,7 +505,9 @@ def assignments_view(request):
         qs = Assignment.objects.all()
         if hasattr(request.user, 'student_profile'):
             s = request.user.student_profile
-            qs = qs.filter(department__iexact=s.department, year=s.year)
+            qs = qs.filter(department__iexact=s.department, year=s.year).filter(Q(section='') | Q(section__iexact=s.section))
+        elif not request.user.is_superuser:
+            qs = qs.filter(department__iexact=hod_department(request.user))
 
         serializer = AssignmentSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
@@ -486,6 +518,9 @@ def assignments_view(request):
 
     serializer = AssignmentSerializer(data=request.data)
     if serializer.is_valid():
+        department = hod_department(request.user)
+        if not request.user.is_superuser and serializer.validated_data['department'].casefold() != department.casefold():
+            return Response({'detail': 'You may only create assignments for your own department.'}, status=status.HTTP_403_FORBIDDEN)
         assignment = serializer.save(created_by=request.user)
         AuditLog.objects.create(
             user=request.user,
@@ -503,6 +538,8 @@ def delete_assignment_view(request, pk):
         assignment = Assignment.objects.get(pk=pk)
     except Assignment.DoesNotExist:
         return Response({'detail': 'Assignment not found.'}, status=status.HTTP_404_NOT_FOUND)
+    if not request.user.is_superuser and assignment.department.casefold() != hod_department(request.user).casefold():
+        return Response({'detail': 'You may only manage your own department assignments.'}, status=status.HTTP_403_FORBIDDEN)
     assignment.delete()
     return Response({'detail': 'Assignment deleted.'}, status=status.HTTP_204_NO_CONTENT)
 
@@ -518,6 +555,9 @@ def submit_assignment_view(request, pk):
         return Response({'detail': 'Assignment not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     student = request.user.student_profile
+    if (assignment.department.casefold() != student.department.casefold() or assignment.year != student.year
+            or (assignment.section and assignment.section.casefold() != student.section.casefold())):
+        return Response({'detail': 'This assignment is not assigned to your class.'}, status=status.HTTP_403_FORBIDDEN)
     file_obj = request.FILES.get('file')
     notes = request.data.get('notes', '')
 
@@ -544,6 +584,8 @@ def assignment_submissions_view(request, pk):
     except Assignment.DoesNotExist:
         return Response({'detail': 'Assignment not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+    if not request.user.is_superuser and assignment.department.casefold() != hod_department(request.user).casefold():
+        return Response({'detail': 'You may only review submissions in your own department.'}, status=status.HTTP_403_FORBIDDEN)
     subs = assignment.submissions.all()
     serializer = AssignmentSubmissionSerializer(subs, many=True)
     return Response(serializer.data)
@@ -558,6 +600,8 @@ def grade_submission_view(request, pk):
     except AssignmentSubmission.DoesNotExist:
         return Response({'detail': 'Submission not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+    if not request.user.is_superuser and sub.assignment.department.casefold() != hod_department(request.user).casefold():
+        return Response({'detail': 'You may only grade submissions in your own department.'}, status=status.HTTP_403_FORBIDDEN)
     serializer = GradeSubmissionSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -598,7 +642,9 @@ def study_materials_view(request):
         qs = StudyMaterial.objects.all()
         if hasattr(request.user, 'student_profile'):
             s = request.user.student_profile
-            qs = qs.filter(department__iexact=s.department, year=s.year)
+            qs = qs.filter(department__iexact=s.department, year=s.year).filter(Q(section='') | Q(section__iexact=s.section))
+        elif not request.user.is_superuser:
+            qs = qs.filter(department__iexact=hod_department(request.user))
 
         serializer = StudyMaterialSerializer(qs, many=True)
         return Response(serializer.data)
@@ -613,6 +659,9 @@ def study_materials_view(request):
         if file_obj:
             file_size_str = f"{round(file_obj.size / (1024 * 1024), 1)} MB"
 
+        department = hod_department(request.user)
+        if not request.user.is_superuser and serializer.validated_data['department'].casefold() != department.casefold():
+            return Response({'detail': 'You may only upload materials for your own department.'}, status=status.HTTP_403_FORBIDDEN)
         mat = serializer.save(uploaded_by=request.user, file_size=file_size_str)
         return Response(StudyMaterialSerializer(mat).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -625,6 +674,8 @@ def delete_study_material_view(request, pk):
         mat = StudyMaterial.objects.get(pk=pk)
     except StudyMaterial.DoesNotExist:
         return Response({'detail': 'Material not found.'}, status=status.HTTP_404_NOT_FOUND)
+    if not request.user.is_superuser and mat.department.casefold() != hod_department(request.user).casefold():
+        return Response({'detail': 'You may only manage your own department materials.'}, status=status.HTTP_403_FORBIDDEN)
     mat.delete()
     return Response({'detail': 'Study material deleted.'}, status=status.HTTP_204_NO_CONTENT)
 
@@ -645,7 +696,7 @@ def documents_view(request):
         if hasattr(request.user, 'student_profile'):
             qs = Document.objects.filter(student=request.user.student_profile)
         else:
-            qs = Document.objects.all()
+            qs = Document.objects.filter(student__department__iexact=hod_department(request.user))
         serializer = DocumentSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -670,7 +721,7 @@ def documents_view(request):
 def review_document_view(request, pk):
     """HOD reviews student document (Approved, Correction, Rejected)."""
     try:
-        doc = Document.objects.get(pk=pk)
+        doc = Document.objects.get(pk=pk, student__department__iexact=hod_department(request.user))
     except Document.DoesNotExist:
         return Response({'detail': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -718,7 +769,7 @@ def leaves_view(request):
         if hasattr(request.user, 'student_profile'):
             qs = LeaveRequest.objects.filter(student=request.user.student_profile)
         else:
-            qs = LeaveRequest.objects.all()
+            qs = LeaveRequest.objects.filter(student__department__iexact=hod_department(request.user))
         serializer = LeaveRequestSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -743,7 +794,7 @@ def leaves_view(request):
 def review_leave_view(request, pk):
     """HOD approves or rejects student leave request."""
     try:
-        leave = LeaveRequest.objects.get(pk=pk)
+        leave = LeaveRequest.objects.get(pk=pk, student__department__iexact=hod_department(request.user))
     except LeaveRequest.DoesNotExist:
         return Response({'detail': 'Leave request not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -793,7 +844,7 @@ def department_marks_view(request):
     POST: HOD records/updates internal marks.
     """
     if request.method == 'GET':
-        qs = InternalMark.objects.all()
+        qs = InternalMark.objects.filter(student__department__iexact=hod_department(request.user))
         sub = request.query_params.get('subject_code')
         exam = request.query_params.get('exam_type')
         if sub:
@@ -806,6 +857,9 @@ def department_marks_view(request):
     # POST (save mark)
     serializer = InternalMarkSerializer(data=request.data)
     if serializer.is_valid():
+        student = serializer.validated_data['student']
+        if not request.user.is_superuser and student.department.casefold() != hod_department(request.user).casefold():
+            return Response({'detail': 'You may only record marks for your own department.'}, status=status.HTTP_403_FORBIDDEN)
         mark = serializer.save(entered_by=request.user)
         return Response(InternalMarkSerializer(mark).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -854,18 +908,18 @@ def mark_all_notifications_read_view(request):
 def department_overview_view(request):
     """Comprehensive executive KPI summary for Head of Department."""
     dept = getattr(request.user.hod_profile, 'department', 'Information Technology') if hasattr(request.user, 'hod_profile') else 'Information Technology'
-    students = StudentProfile.objects.all()
+    students = department_student_queryset(request.user)
 
     total_students = students.count()
-    pending_leaves = LeaveRequest.objects.filter(status='PENDING').count()
-    pending_docs = Document.objects.filter(status='PENDING').count()
-    active_assignments = Assignment.objects.filter(due_date__gte=timezone.now().date()).count()
+    pending_leaves = LeaveRequest.objects.filter(student__in=students, status='PENDING').count()
+    pending_docs = Document.objects.filter(student__in=students, status='PENDING').count()
+    active_assignments = Assignment.objects.filter(department__iexact=dept, due_date__gte=timezone.now().date()).count()
 
     # Attendance average
-    records = Attendance.objects.all()
+    records = Attendance.objects.filter(student__in=students)
     tot = records.count()
     att = records.filter(status__in=['PRESENT', 'OD']).count()
-    dept_avg = round((att / tot * 100), 1) if tot > 0 else 88.5
+    dept_avg = round((att / tot * 100), 1) if tot > 0 else 100.0
 
     # Low attendance count (<75%)
     low_att_count = 0
@@ -896,7 +950,7 @@ def department_students_list_view(request):
     Search and filter students by name, register number, year, section.
     Returns student list with attendance rates and status badges.
     """
-    qs = StudentProfile.objects.select_related('user').all()
+    qs = department_student_queryset(request.user)
 
     search = request.query_params.get('search')
     year = request.query_params.get('year')
@@ -940,22 +994,25 @@ def department_students_list_view(request):
 def department_student_detail_view(request, pk):
     """Inspect complete 360-degree student academic dossier."""
     try:
-        student = StudentProfile.objects.select_related('user').get(pk=pk)
+        student = department_student_queryset(request.user).get(pk=pk)
     except StudentProfile.DoesNotExist:
         return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     data = StudentProfileSerializer(student).data
-    data['attendance_summary'] = student_attendance_summary_view(request._request).data if hasattr(request, '_request') else {}
+    records = Attendance.objects.filter(student=student)
+    total = records.count()
+    attended = records.filter(status__in=['PRESENT', 'OD']).count()
+    data['attendance_summary'] = {
+        'total_classes': total,
+        'attended_classes': attended,
+        'percentage': round(attended / total * 100, 1) if total else 100.0,
+    }
     data['leaves'] = LeaveRequestSerializer(student.leave_requests.all(), many=True).data
     data['documents'] = DocumentSerializer(student.documents.all(), many=True).data
     data['marks'] = InternalMarkSerializer(student.internal_marks.all(), many=True).data
 
     return Response(data)
 
-
-import mimetypes
-from django.http import Http404, FileResponse
-from django.utils._os import safe_join
 
 def secure_media_view(request, path):
     """

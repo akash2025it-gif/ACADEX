@@ -234,14 +234,10 @@ os.makedirs(STATIC_ROOT, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email configuration (SMTP in production, console in development)
-if DEBUG:
-    EMAIL_BACKEND_CHOICE = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-else:
-    EMAIL_BACKEND_CHOICE = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-
-MAILERS = {
-    'default': {
-        'BACKEND': EMAIL_BACKEND_CHOICE,
-    },
-}
+# Email configuration (SMTP in production, console in development).  ``MAILERS``
+# is intentionally not used: it belongs to third-party mailer packages and makes
+# Django's deployment check reject a standard console backend.
+EMAIL_BACKEND = os.environ.get(
+    'DJANGO_EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend',
+)

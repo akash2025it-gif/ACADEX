@@ -125,6 +125,35 @@ class AcadexPermissionsAndBusinessLogicTests(TestCase):
         self.assertIn('total_students', res.data)
         self.assertIn('avg_attendance', res.data)
 
+    def test_hod_cannot_access_another_department_student(self):
+        """Department-scoped endpoints must not disclose another department's data."""
+        other_user = User.objects.create_user(username='26CS101', password='Password123', role='STUDENT')
+        other_student = StudentProfile.objects.create(
+            user=other_user, register_number='26CS101', department='Computer Science', year=3, section='A'
+        )
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.hod_token.key)
+
+        directory = self.client.get('/api/department/students/')
+        self.assertEqual(directory.status_code, status.HTTP_200_OK)
+        self.assertNotIn(other_student.id, [item['id'] for item in directory.data])
+
+        detail = self.client.get(f'/api/department/students/{other_student.id}/')
+        self.assertEqual(detail.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_hod_cannot_mark_attendance_for_another_department(self):
+        other_user = User.objects.create_user(username='26CS102', password='Password123', role='STUDENT')
+        other_student = StudentProfile.objects.create(
+            user=other_user, register_number='26CS102', department='Computer Science', year=3, section='A'
+        )
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.hod_token.key)
+        response = self.client.post('/api/attendance/mark/', {
+            'subject_code': 'CS601', 'subject_name': 'Security', 'date': '2026-11-15',
+            'records': [{'student_id': other_student.id, 'status': 'PRESENT'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertFalse(Attendance.objects.filter(student=other_student).exists())
+
     def test_leave_application_and_approval_flow(self):
         """Test end-to-end leave application, listing and HOD approval."""
         # 1. Student applies for leave
