@@ -107,7 +107,12 @@ def login_view(request):
     # Try resolving user by username directly
     user = authenticate(username=username_input, password=password)
 
-    # If direct username failed, check if input matches register_number (Student) or employee_id (HOD)
+    # If direct username failed, check if input matches email, register_number (Student) or employee_id (HOD)
+    if not user:
+        user_by_email = User.objects.filter(email__iexact=username_input).first()
+        if user_by_email:
+            user = authenticate(username=user_by_email.username, password=password)
+
     if not user:
         student = StudentProfile.objects.filter(register_number__iexact=username_input).select_related('user').first()
         if student:

@@ -25,7 +25,7 @@ services:
     runtime: python
     rootDir: ACADEX/backend
     plan: free
-    buildCommand: "pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput"
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate && python manage.py seed_acadex_data && python manage.py collectstatic --noinput"
     startCommand: "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
       - key: PYTHON_VERSION
