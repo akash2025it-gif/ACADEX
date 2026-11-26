@@ -60,8 +60,29 @@ const API = {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const errorMsg = data.detail || data.error || (data.non_field_errors && data.non_field_errors[0]) || 'An error occurred with the request';
-        throw new Error(errorMsg);
+        let errorMsg = data.detail || data.error || (data.non_field_errors && data.non_field_errors[0]);
+
+        if (!errorMsg && typeof data === 'object' && data !== null && Object.keys(data).length > 0) {
+          const messages = [];
+          for (const [field, errors] of Object.entries(data)) {
+            const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const errList = Array.isArray(errors) ? errors : [errors];
+            const cleanErrors = errList.map(e => (typeof e === 'object' && e !== null) ? JSON.stringify(e) : String(e));
+            messages.push(`${fieldLabel}: ${cleanErrors.join(' ')}`);
+          }
+          if (messages.length > 0) {
+            errorMsg = messages.join('\n');
+          }
+        }
+
+        if (!errorMsg) {
+          errorMsg = response.statusText || 'An error occurred with the request';
+        }
+
+        const error = new Error(errorMsg);
+        error.data = data;
+        error.status = response.status;
+        throw error;
       }
 
       return data;

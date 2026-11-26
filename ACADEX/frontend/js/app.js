@@ -402,11 +402,13 @@ const App = {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
           <div class="form-group">
             <label class="form-label">Register Number <span class="required">*</span></label>
-            <input type="text" class="form-control" name="register_number" placeholder="25IT120" required />
+            <input type="text" class="form-control" name="register_number" placeholder="e.g. 25IT205" required />
+            <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem; display: block;">Unique Student ID (e.g. 25IT205). Already registered? <a href="#login" style="color: var(--primary); text-decoration: underline;">Sign In</a></small>
           </div>
           <div class="form-group">
             <label class="form-label">Official Email <span class="required">*</span></label>
-            <input type="email" class="form-control" name="email" placeholder="aarav.k@acadex.edu" required />
+            <input type="email" class="form-control" name="email" placeholder="aarav.k@institution.edu" required />
+            <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem; display: block;">Unique institutional or personal email</small>
           </div>
         </div>
 
@@ -447,6 +449,7 @@ const App = {
         <div class="form-group">
           <label class="form-label">Password (at least 8 characters) <span class="required">*</span></label>
           <input type="password" class="form-control" name="password" minlength="8" placeholder="••••••••" required />
+          <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem; display: block;">Must contain at least 8 characters</small>
         </div>
 
         <div class="form-group">
@@ -481,21 +484,31 @@ const App = {
   async handleRegisterSubmit(e) {
     e.preventDefault();
     const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.innerHTML : 'Complete Student Registration';
+
     const password = form.password.value;
     const confirmPassword = form.confirm_password.value;
 
-    if (password !== confirmPassword) {
-      this.showToast('Passwords do not match. Please re-enter identical passwords.', 'error');
+    if (password.length < 8) {
+      this.showToast('Password must be at least 8 characters long.', 'warning', 'Invalid Password');
       return;
     }
 
-    const regNo = form.register_number.value.trim();
+    if (password !== confirmPassword) {
+      this.showToast('Passwords do not match. Please re-enter identical passwords.', 'error', 'Password Mismatch');
+      return;
+    }
+
+    const regNo = form.register_number.value.trim().toUpperCase();
+    const email = form.email.value.trim().toLowerCase();
+
     const data = {
       username: regNo,
       register_number: regNo,
       first_name: form.first_name.value.trim(),
       last_name: form.last_name.value.trim(),
-      email: form.email.value.trim(),
+      email: email,
       department: form.department.value,
       year: parseInt(form.year.value, 10),
       section: form.section.value,
@@ -505,12 +518,31 @@ const App = {
     };
 
     try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = 'Creating Account…';
+      }
       const res = await API.auth.registerStudent(data);
       Auth.setSession(res.user, res.token);
-      this.showToast(`Registration successful! Welcome, ${res.user.first_name}.`, 'success');
+      this.showToast(`Registration successful! Welcome, ${res.user.first_name}.`, 'success', 'Account Created');
       window.location.hash = '#student-overview';
     } catch (err) {
-      this.showToast(err.message || 'Registration failed. Check your details.', 'error');
+      let msg = err.message || 'Registration failed. Check your details.';
+      if (err.data) {
+        if ((err.data.register_number || err.data.username) && err.data.email) {
+          msg = `Register Number '${regNo}' and email '${email}' are already registered. If this is your account, please sign in.`;
+        } else if (err.data.register_number || err.data.username) {
+          msg = `Register Number '${regNo}' is already registered. If this is your account, please sign in.`;
+        } else if (err.data.email) {
+          msg = `Email '${email}' is already registered. Please sign in or use another email.`;
+        }
+      }
+      this.showToast(msg, 'error', 'Registration Error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
     }
   },
 
@@ -790,21 +822,28 @@ const App = {
     else if (type === 'error') iconName = 'xCircle';
     else if (type === 'warning') iconName = 'alertCircle';
 
+    const safeMessage = String(message || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+
     toast.innerHTML = `
       <div class="toast-icon">${getIcon(iconName)}</div>
       <div class="toast-content">
         <div class="toast-title">${title || (type.charAt(0).toUpperCase() + type.slice(1))}</div>
-        <div class="toast-message">${message}</div>
+        <div class="toast-message" style="white-space: pre-line; line-height: 1.4;">${safeMessage}</div>
       </div>
     `;
 
     container.appendChild(toast);
     setTimeout(() => toast.classList.add('show'), 10);
 
+    const duration = type === 'error' ? 6000 : 4000;
     setTimeout(() => {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    }, duration);
   },
 
   async showNotificationsDrop() {
